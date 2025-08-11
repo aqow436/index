@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Premium Şahmat Oyunu</title>
+    <style>
+        :root {
+            --board-bg-light: #f0d9b5;
+            --board-bg-dark: #b58863;
+            --highlight-color: rgba(255, 255, 0, 0.5);
+            --possible-move-color: rgba(0, 0, 0, 0.15);
+            --text-color: #333;
+            --background-color: #f4f4f4;
+            --button-bg: #4a7399;
+            --button-hover-bg: #6a93b9;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+
+        .game-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 30px;
+            padding: 20px;
+        }
+
+        #board {
+            width: 64vmin;
+            height: 64vmin;
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            border: 5px solid #3a3a3a;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            border-radius: 5px;
+        }
+
+        .square {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 7vmin;
+            position: relative;
+        }
+
+        .light { background-color: var(--board-bg-light); }
+        .dark { background-color: var(--board-bg-dark); }
+
+        .piece {
+            cursor: pointer;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            transition: transform 0.1s ease-in-out;
+        }
+        
+        .piece:hover {
+            transform: scale(1.1);
+        }
+
+        .highlight {
+            background-color: var(--highlight-color);
+        }
+
+        .possible-move::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 35%;
+            height: 35%;
+            background-color: var(--possible-move-color);
+            border-radius: 50%;
+        }
+        
+        .possible-capture::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            box-shadow: inset 0 0 0 4px var(--possible-move-color);
+            border-radius: 0;
+            box-sizing: border-box;
+        }
+
+
+        .info-panel {
+            width: 300px;
+            padding: 20px;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        h1 {
+            color: var(--text-color);
+            margin-bottom: 20px;
+        }
+
+        #status, #history {
+            margin-bottom: 15px;
+            font-size: 1.1em;
+            min-height: 24px;
+        }
+
+        #history-box {
+            height: 150px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 5px;
+            background: #f9f9f9;
+            text-align: left;
+        }
+
+        button {
+            background-color: var(--button-bg);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            font-size: 1em;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background-color: var(--button-hover-bg);
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px 40px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        .modal-content h2 {
+            margin-bottom: 25px;
+        }
+
+        .modal-content button {
+            margin: 0 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <div id="board"></div>
+        <div class="info-panel">
+            <h1>Premium Şahmat</h1>
+            <div id="status">Terlan dedevin agzin sikim ?</div>
+            <h3>Gedişlər Tarixçəsi</h3>
+            <div id="history-box"></div>
+            <button id="resetButton">Yenidən Başla</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="difficultyModal">
+        <div class="modal-content">
+            <h2>Çətinlik Səviyyəsini Seçin</h2>
+            <button class="difficulty-btn" data-depth="1">Sadə</button>
+            <button class="difficulty-btn" data-depth="2">Orta</button>
+            <button class="difficulty-btn" data-depth="3">Güclü</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.2/chess.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const boardElement = document.getElementById('board');
+            const statusElement = document.getElementById('status');
+            const historyBox = document.getElementById('history-box');
+            const resetButton = document.getElementById('resetButton');
+            const difficultyModal = document.getElementById('difficultyModal');
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            let game = new Chess();
+            let board = null;
+            let selectedPiece = null;
+            let highlightedSquares = [];
+            let possibleMoves = [];
+            let playerColor = 'w';
+            let aiDifficulty = 2; // Default Orta
+
+            const pieceUnicode = {
+                w: { p: '♙', r: '♖', n: '♘', b: '♗', q: '♕', k: '♔' },
+                b: { p: '♟', r: '♜', n: '♞', b: '♝', q: '♛', k: '♚' }
+            };
+
+            function createBoard() {
+                boardElement.innerHTML = '';
+                for (let i = 0; i < 64; i++) {
+                    const square = document.createElement('div');
+                    const row = Math.floor(i / 8);
+                    const col = i % 8;
+                    square.classList.add('square', (row + col) % 2 === 0 ? 'light' : 'dark');
+                    square.dataset.square = String.fromCharCode(97 + col) + (8 - row);
+                    boardElement.appendChild(square);
+                }
+                addBoardListeners();
+            }
+
+            function drawBoard() {
+                const squares = document.querySelectorAll('.square');
+                squares.forEach(square => {
+                    square.innerHTML = '';
+                    const squareId = square.dataset.square;
+                    const piece = game.get(squareId);
+                    if (piece) {
+                        const pieceElement = document.createElement('span');
+                        pieceElement.classList.add('piece');
+                        pieceElement.innerText = pieceUnicode[piece.color][piece.type];
+                        pieceElement.dataset.piece = `${piece.color}${piece.type}`;
+                        pieceElement.dataset.square = squareId;
+                        square.appendChild(pieceElement);
+                    }
+                });
+            }
+
+            function updateStatus() {
+                let statusText = '';
+                const moveColor = game.turn() === 'w' ? 'Ağlar' : 'Qaralar';
+
+                if (game.in_checkmate()) {
+                    statusText = `Oyun bitdi. ${moveColor} mat oldu.`;
+                } else if (game.in_draw()) {
+                    statusText = 'Oyun heç-heçə bitdi.';
+                } else {
+                    statusText = `${moveColor} gedişdədir.`;
+                    if (game.in_check()) {
+                        statusText += ` ${moveColor} şahdır.`;
+                    }
+                }
+                statusElement.textContent = statusText;
+                updateHistory();
+            }
+            
+            function updateHistory() {
+                historyBox.innerHTML = '';
+                const history = game.history({ verbose: true });
+                history.forEach((move, index) => {
+                    const moveNumber = Math.floor(index / 2) + 1;
+                    if (index % 2 === 0) {
+                        historyBox.innerHTML += `${moveNumber}. ${move.san} `;
+                    } else {
+                        historyBox.innerHTML += `${move.san}<br>`;
+                    }
+                });
+                historyBox.scrollTop = historyBox.scrollHeight;
+            }
+
+            function clearHighlights() {
+                highlightedSquares.forEach(sq => sq.classList.remove('highlight'));
+                possibleMoves.forEach(sq => {
+                    sq.classList.remove('possible-move');
+                    sq.classList.remove('possible-capture');
+                });
+                highlightedSquares = [];
+                possibleMoves = [];
+            }
+
+            function highlightSquare(square) {
+                const squareEl = document.querySelector(`[data-square="${square}"]`);
+                if (squareEl) {
+                    squareEl.classList.add('highlight');
+                    highlightedSquares.push(squareEl);
+                }
+            }
+
+            function showPossibleMoves(square) {
+                const moves = game.moves({ square: square, verbose: true });
+                moves.forEach(move => {
+                    const targetSquareEl = document.querySelector(`[data-square="${move.to}"]`);
+                    if (targetSquareEl) {
+                         if (move.flags.includes('c')) {
+                             targetSquareEl.classList.add('possible-capture');
+                         } else {
+                            targetSquareEl.classList.add('possible-move');
+                         }
+                        possibleMoves.push(targetSquareEl);
+                    }
+                });
+            }
+
+            function handleSquareClick(event) {
+                if (game.game_over()) return;
+                if (game.turn() !== playerColor) return;
+
+                const target = event.target.closest('.square');
+                if (!target) return;
+                
+                const clickedSquare = target.dataset.square;
+                const pieceOnSquare = game.get(clickedSquare);
+
+                if (selectedPiece) {
+                    // Try to make a move
+                    const move = game.move({
+                        from: selectedPiece,
+                        to: clickedSquare,
+                        promotion: 'q' // Always promote to queen for simplicity
+                    });
+
+                    clearHighlights();
+                    selectedPiece = null;
+
+                    if (move) {
+                        drawBoard();
+                        updateStatus();
+                        // AI's turn
+                        window.setTimeout(makeAIMove, 250);
+                    }
+                } else {
+                    // Select a piece
+                    if (pieceOnSquare && pieceOnSquare.color === playerColor) {
+                        selectedPiece = clickedSquare;
+                        highlightSquare(clickedSquare);
+                        showPossibleMoves(clickedSquare);
+                    }
+                }
+            }
+
+            function addBoardListeners() {
+                const squares = document.querySelectorAll('.square');
+                squares.forEach(square => {
+                    square.addEventListener('click', handleSquareClick);
+                });
+            }
+            
+            // --- AI LOGIC ---
+            function evaluateBoard(game) {
+                let totalEvaluation = 0;
+                const pieces = game.SQUARES;
+                for (let i = 0; i < pieces.length; i++) {
+                    const piece = game.get(pieces[i]);
+                    if (piece) {
+                        totalEvaluation += getPieceValue(piece.type, piece.color);
+                    }
+                }
+                return totalEvaluation;
+            }
+
+            function getPieceValue(piece, color) {
+                const absoluteValues = { 'p': 10, 'n': 30, 'b': 30, 'r': 50, 'q': 90, 'k': 900 };
+                let value = absoluteValues[piece];
+                return color === 'w' ? value : -value;
+            }
+
+            function minimax(game, depth, alpha, beta, isMaximizingPlayer) {
+                if (depth === 0 || game.game_over()) {
+                    return -evaluateBoard(game);
+                }
+
+                const newGameMoves = game.moves();
+                
+                if (isMaximizingPlayer) {
+                    let maxEval = -Infinity;
+                    for (let i = 0; i < newGameMoves.length; i++) {
+                        game.move(newGameMoves[i]);
+                        let evaluation = minimax(game, depth - 1, alpha, beta, false);
+                        game.undo();
+                        maxEval = Math.max(maxEval, evaluation);
+                        alpha = Math.max(alpha, evaluation);
+                        if (beta <= alpha) {
+                            break;
+                        }
+                    }
+                    return maxEval;
+                } else {
+                    let minEval = Infinity;
+                    for (let i = 0; i < newGameMoves.length; i++) {
+                        game.move(newGameMoves[i]);
+                        let evaluation = minimax(game, depth - 1, alpha, beta, true);
+                        game.undo();
+                        minEval = Math.min(minEval, evaluation);
+                        beta = Math.min(beta, evaluation);
+                        if (beta <= alpha) {
+                            break;
+                        }
+                    }
+                    return minEval;
+                }
+            }
+
+            function getBestMove(game, depth) {
+                let bestMove = null;
+                let bestValue = -Infinity;
+                const moves = game.moves();
+                
+                // Shuffle moves to add variety
+                for (let i = moves.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [moves[i], moves[j]] = [moves[j], moves[i]];
+                }
+
+                for (let i = 0; i < moves.length; i++) {
+                    const move = moves[i];
+                    game.move(move);
+                    const boardValue = minimax(game, depth - 1, -Infinity, Infinity, false);
+                    game.undo();
+                    if (boardValue > bestValue) {
+                        bestValue = boardValue;
+                        bestMove = move;
+                    }
+                }
+                return bestMove;
+            }
+
+
+            function makeAIMove() {
+                if (game.game_over()) return;
+
+                const move = getBestMove(game, aiDifficulty);
+                game.move(move);
+                drawBoard();
+                updateStatus();
+            }
+
+            function startGame(difficulty) {
+                aiDifficulty = difficulty;
+                game = new Chess();
+                playerColor = 'w';
+                selectedPiece = null;
+                difficultyModal.style.display = 'none';
+                
+                createBoard();
+                drawBoard();
+                updateStatus();
+            }
+
+            resetButton.addEventListener('click', () => {
+                difficultyModal.style.display = 'flex';
+            });
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = parseInt(button.dataset.depth);
+                    startGame(difficulty);
+                });
+            });
+
+            // Initial prompt
+            difficultyModal.style.display = 'flex';
+        });
+
+    </script>
+</body>
+</html>
